@@ -1,0 +1,590 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Department Weekly Planner Collager</title>
+    <link rel="icon" type="image/png" href="gcu.png">
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Mammoth.js for reading .docx -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+    
+    <!-- Docx.js for generating .docx -->
+    <script src="https://unpkg.com/docx@7.1.0/build/index.js"></script>
+    
+    <!-- FileSaver.js for downloading -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+
+    <style>
+        .drag-active {
+            border-color: #3b82f6;
+            background-color: #eff6ff;
+        }
+        .loader {
+            border: 3px solid #f3f3f3;
+            border-radius: 50%;
+            border-top: 3px solid #3b82f6;
+            width: 24px;
+            height: 24px;
+            -webkit-animation: spin 1s linear infinite; /* Safari */
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 font-sans min-h-screen flex flex-col">
+
+    <!-- Header -->
+    <header class="bg-white shadow-sm sticky top-0 z-10">
+        <div class="max-w-4xl mx-auto px-6 py-4 flex items-center gap-4">
+            <img src="https://www.gardencity.university/wp-content/uploads/2023/03/GCU-Logo-White.png" alt="Garden City University" class="h-16 bg-orange-600 p-2 rounded-lg">
+            <div>
+                <h1 class="text-xl font-bold text-slate-800">Department Weekly Activity Planner</h1>
+                <p class="text-sm text-slate-500">Cumulative Report Generator</p>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="flex-grow max-w-4xl mx-auto w-full px-6 py-8 space-y-8">
+        
+        <!-- Instructions -->
+        <section class="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
+            <h2 class="text-lg font-semibold mb-3 flex items-center gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-blue-600"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                How it works
+            </h2>
+            <p class="text-slate-600 mb-2">
+                This tool merges weekly planners from multiple departments into one master document.
+            </p>
+            <ul class="list-disc list-inside text-sm text-slate-600 space-y-1 ml-2">
+                <li>Select all department <strong>.docx</strong> files.</li>
+                
+            </ul>
+        </section>
+
+        <!-- Upload Area -->
+        <section id="drop-zone" class="border-2 border-dashed border-slate-300 rounded-xl p-10 text-center transition-colors cursor-pointer hover:border-blue-400 hover:bg-slate-50 bg-white">
+            <input type="file" id="file-input" multiple accept=".docx" class="hidden">
+            
+            <div class="flex flex-col items-center justify-center gap-3 pointer-events-none">
+                <div class="bg-blue-100 p-4 rounded-full text-blue-600 mb-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                </div>
+                <h3 class="text-lg font-medium">Click to select files or drag them here</h3>
+                <p class="text-sm text-slate-400">Supported format: .docx</p>
+            </div>
+        </section>
+
+        <!-- File List & Status -->
+        <div id="processing-area" class="hidden space-y-6">
+            
+            <!-- File Stats -->
+            <div class="flex justify-between items-center">
+                <h3 class="font-semibold text-slate-700">Files to Process: <span id="file-count" class="text-blue-600">0</span></h3>
+                <button id="clear-btn" class="text-sm text-red-500 hover:text-red-700 hover:underline">Clear All</button>
+            </div>
+
+            <!-- List -->
+            <ul id="file-list" class="bg-white rounded-lg shadow-sm border border-slate-200 divide-y divide-slate-100 max-h-60 overflow-y-auto">
+                <!-- File items injected here -->
+            </ul>
+
+            <!-- Action Button -->
+            <button id="generate-btn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-4 rounded-xl shadow-md transition-all flex justify-center items-center gap-3">
+                <span>Generate Cumulative Report</span>
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            </button>
+        </div>
+
+        <!-- Success Message -->
+        <div id="success-msg" class="hidden bg-green-50 border border-green-200 rounded-xl p-6 text-center">
+            <div class="inline-flex items-center justify-center w-12 h-12 rounded-full bg-green-100 text-green-600 mb-4">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            </div>
+            <h3 class="text-lg font-bold text-green-800 mb-1">Report Generated Successfully!</h3>
+            <p class="text-green-600">Your download should start automatically.</p>
+            <button onclick="location.reload()" class="mt-4 text-sm font-medium text-green-700 underline">Start Over</button>
+        </div>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="text-center py-6 text-slate-400 text-sm">
+        <p>&copy; Garden City University - Academic Tools</p>
+    </footer>
+
+    <script>
+        // --- Global State ---
+        let selectedFiles = [];
+        const dropZone = document.getElementById('drop-zone');
+        const fileInput = document.getElementById('file-input');
+        const processingArea = document.getElementById('processing-area');
+        const fileList = document.getElementById('file-list');
+        const fileCountSpan = document.getElementById('file-count');
+        const generateBtn = document.getElementById('generate-btn');
+        const successMsg = document.getElementById('success-msg');
+        const clearBtn = document.getElementById('clear-btn');
+
+        // --- Event Listeners ---
+        
+        dropZone.addEventListener('click', () => fileInput.click());
+
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.classList.add('drag-active');
+        });
+
+        dropZone.addEventListener('dragleave', () => {
+            dropZone.classList.remove('drag-active');
+        });
+
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('drag-active');
+            handleFiles(e.dataTransfer.files);
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            handleFiles(e.target.files);
+        });
+
+        clearBtn.addEventListener('click', () => {
+            selectedFiles = [];
+            renderFileList();
+            processingArea.classList.add('hidden');
+            fileInput.value = ''; 
+        });
+
+        generateBtn.addEventListener('click', generateReport);
+
+
+        // --- Functions ---
+
+        function handleFiles(files) {
+            if (!files.length) return;
+            
+            const newFiles = Array.from(files).filter(f => 
+                f.name.toLowerCase().endsWith('.docx')
+            );
+
+            if(newFiles.length === 0) {
+                alert("Please upload .docx files only.");
+                return;
+            }
+
+            selectedFiles = [...selectedFiles, ...newFiles];
+            renderFileList();
+        }
+
+        function renderFileList() {
+            if (selectedFiles.length > 0) {
+                processingArea.classList.remove('hidden');
+            } else {
+                processingArea.classList.add('hidden');
+            }
+
+            fileCountSpan.textContent = selectedFiles.length;
+            fileList.innerHTML = '';
+
+            selectedFiles.forEach((file, index) => {
+                const li = document.createElement('li');
+                li.className = 'px-4 py-3 flex justify-between items-center';
+                li.innerHTML = `
+                    <div class="flex items-center gap-3 overflow-hidden">
+                        <div class="bg-blue-100 p-2 rounded text-blue-600">
+                             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg>
+                        </div>
+                        <span class="text-sm font-medium text-slate-700 truncate">${file.name}</span>
+                    </div>
+                    <button class="text-slate-400 hover:text-red-500" onclick="removeFile(${index})">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                    </button>
+                `;
+                fileList.appendChild(li);
+            });
+        }
+
+        window.removeFile = (index) => {
+            selectedFiles.splice(index, 1);
+            renderFileList();
+        };
+
+        // --- Core Parsing Logic ---
+
+        async function generateReport() {
+            if (selectedFiles.length === 0) return;
+
+            const originalBtnText = generateBtn.innerHTML;
+            generateBtn.innerHTML = `<div class="loader"></div> Processing ${selectedFiles.length} files...`;
+            generateBtn.disabled = true;
+            generateBtn.classList.add('opacity-75', 'cursor-not-allowed');
+
+            try {
+                // Array to hold structured data for each department file
+                const parsedReports = [];
+                let universityLogo = null; // Store { data, width, height }
+                let globalWeekInfo = ""; // Store Week info to show once at top
+
+                for (let i = 0; i < selectedFiles.length; i++) {
+                    const file = selectedFiles[i];
+                    const arrayBuffer = await readFileAsync(file);
+                    
+                    // Convert DOCX to HTML using Mammoth
+                    const result = await mammoth.convertToHtml({ arrayBuffer: arrayBuffer });
+                    const html = result.value;
+
+                    // Parse HTML
+                    const parser = new DOMParser();
+                    const doc = parser.parseFromString(html, 'text/html');
+                    const tables = doc.querySelectorAll('table');
+
+                    // --- Header Image Extraction (First file only) ---
+                    if (i === 0) {
+                        const imgTag = doc.querySelector('img');
+                        if (imgTag && imgTag.src) {
+                            try {
+                                const base64Data = imgTag.src;
+                                // Load image to get dimensions and verify valid base64
+                                const imageObj = new Image();
+                                imageObj.src = base64Data;
+                                await new Promise((resolve, reject) => {
+                                    imageObj.onload = resolve;
+                                    imageObj.onerror = reject;
+                                });
+                                
+                                // Calculate dimensions (max width 600px for A4)
+                                let w = imageObj.width;
+                                let h = imageObj.height;
+                                const maxWidth = 600;
+                                if (w > maxWidth) {
+                                    const ratio = maxWidth / w;
+                                    w = maxWidth;
+                                    h = h * ratio;
+                                }
+
+                                // Convert base64 string to Uint8Array for docx.js
+                                const pureBase64 = base64Data.split(',')[1];
+                                const binaryString = window.atob(pureBase64);
+                                const bytes = new Uint8Array(binaryString.length);
+                                for (let k = 0; k < binaryString.length; k++) {
+                                    bytes[k] = binaryString.charCodeAt(k);
+                                }
+
+                                universityLogo = { data: bytes, width: w, height: h };
+                            } catch (e) {
+                                console.warn("Could not extract/process logo from first file", e);
+                            }
+                        }
+                    }
+
+                    // Default values
+                    let department = "Unknown Department";
+                    let weekInfo = "";
+                    let facultyRows = [];
+
+                    // Logic to extract header and data
+                    if (tables.length >= 2) {
+                        const headerTable = tables[0];
+                        const dataTable = tables[1];
+
+                        // Extract clean header info from Table 1
+                        const headerData = extractHeaderInfo(headerTable);
+                        if(headerData.dept) department = headerData.dept;
+                        if(headerData.week) weekInfo = headerData.week;
+
+                        // Extract Data Rows from Table 2
+                        facultyRows = parseDataTable(dataTable);
+                    } 
+                    else if (tables.length === 1) {
+                        // If only one table found, try to extract header from surrounding text (Fallback)
+                        const allText = doc.body.textContent;
+                        
+                        const deptMatch = allText.match(/Department\s*:\s*([^,\n\r]+)/i);
+                        if (deptMatch && deptMatch[1]) department = deptMatch[1].trim();
+
+                        const weekMatch = allText.match(/Week\s*:\s*From\s*(.+?)\s*to\s*(.+?)(\n|$)/i);
+                        if (weekMatch) {
+                            weekInfo = `From ${weekMatch[1].trim()} to ${weekMatch[2].trim()}`;
+                        }
+
+                        facultyRows = parseDataTable(tables[0]);
+                    }
+
+                    // Store global week info from first file
+                    if (i === 0 && weekInfo) {
+                        globalWeekInfo = weekInfo;
+                    }
+
+                    // Push to report array
+                    parsedReports.push({
+                        department: department,
+                        rows: facultyRows
+                    });
+                }
+
+                // Generate the cumulative DOCX
+                await createSequentialDocx(parsedReports, universityLogo, globalWeekInfo);
+
+                processingArea.classList.add('hidden');
+                successMsg.classList.remove('hidden');
+
+            } catch (error) {
+                console.error(error);
+                alert("Error processing files: " + error.message);
+                generateBtn.innerHTML = originalBtnText;
+                generateBtn.disabled = false;
+                generateBtn.classList.remove('opacity-75', 'cursor-not-allowed');
+            }
+        }
+
+        // Helper to extract Dept and Week cleanly by joining cells
+        function extractHeaderInfo(table) {
+            let dept = "";
+            let week = "";
+            const rows = table.querySelectorAll('tr');
+            
+            rows.forEach(row => {
+                // Get all cells, trim text, and JOIN WITH SPACE to avoid "From26"
+                const cells = Array.from(row.querySelectorAll('td')).map(td => td.innerText.trim());
+                const rowText = cells.join(" "); 
+                
+                // Case-insensitive checks
+                if (rowText.toLowerCase().includes("department")) {
+                    // Extract text after "Department" label
+                    const match = rowText.match(/Department\s*[:.,-]?\s*(.*)/i);
+                    if(match) dept = match[1].trim();
+                    else dept = rowText.replace("Department", "").trim();
+                }
+                
+                if (rowText.toLowerCase().includes("week")) {
+                    // Extract text after "Week" label
+                    const match = rowText.match(/Week\s*[:.,-]?\s*(.*)/i);
+                    if(match) week = match[1].trim();
+                    else week = rowText.replace("Week", "").trim();
+                }
+            });
+            return { dept, week };
+        }
+
+        // Helper to extract rows from the Activity Table
+        function parseDataTable(tableElement) {
+            const rows = Array.from(tableElement.querySelectorAll('tr'));
+            const data = [];
+            
+            rows.forEach((row) => {
+                const cells = Array.from(row.querySelectorAll('td')).map(td => td.innerText.trim());
+                
+                // Skip if empty or too short
+                if (cells.length < 2) return; 
+
+                // Skip Header row (contains "Name of Faculty" or "Sl No")
+                const textCheck = cells.join(" ").toLowerCase();
+                if (textCheck.includes("name of the faculty") || textCheck.includes("sl no")) return;
+
+                // Structure matches the input file columns
+                data.push({
+                    name: cells[1] || "",
+                    id: cells[2] || "",
+                    hoursTP: cells[3] || "",
+                    activity: cells[4] || "",
+                    hoursOther: cells[5] || ""
+                });
+            });
+            return data;
+        }
+
+        function readFileAsync(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = (e) => resolve(e.target.result);
+                reader.onerror = reject;
+                reader.readAsArrayBuffer(file);
+            });
+        }
+
+        // --- Document Generation ---
+
+        async function createSequentialDocx(reports, logo, globalWeekInfo) {
+            const { Document, Packer, Paragraph, Table, TableRow, TableCell, WidthType, TextRun, AlignmentType, BorderStyle, ImageRun } = docx;
+
+            const borderStyle = {
+                top: { style: BorderStyle.SINGLE, size: 1, color: "000000" },
+                bottom: { style: BorderStyle.SINGLE, size: 1, color: "000000" },
+                left: { style: BorderStyle.SINGLE, size: 1, color: "000000" },
+                right: { style: BorderStyle.SINGLE, size: 1, color: "000000" },
+                insideHorizontal: { style: BorderStyle.SINGLE, size: 1, color: "000000" },
+                insideVertical: { style: BorderStyle.SINGLE, size: 1, color: "000000" },
+            };
+
+            const docChildren = [];
+
+            // 0. Add Logo if exists
+            if (logo) {
+                docChildren.push(
+                    new Paragraph({
+                        alignment: AlignmentType.CENTER,
+                        children: [
+                            new ImageRun({
+                                data: logo.data,
+                                transformation: {
+                                    width: logo.width,
+                                    height: logo.height,
+                                },
+                            }),
+                        ],
+                        spacing: { after: 200 }
+                    })
+                );
+            }
+
+            // 1. Header Line 1: "Garden City University"
+            docChildren.push(
+                new Paragraph({
+                    alignment: AlignmentType.CENTER,
+                    children: [
+                        new TextRun({
+                            text: "Garden City University",
+                            bold: true,
+                            size: 32, // 16pt
+                            color: "993300"
+                        }),
+                    ],
+                })
+            );
+
+            // 2. Header Line 2: "Department-wise Weekly Planner Report"
+            docChildren.push(
+                new Paragraph({
+                    alignment: AlignmentType.CENTER,
+                    children: [
+                        new TextRun({
+                            text: "Department-wise Weekly Planner Report",
+                            bold: true,
+                            size: 24, // 12pt
+                            underline: {}
+                        }),
+                    ],
+                    spacing: { after: 200 } 
+                })
+            );
+
+            // 3. Global Week Info (Only once)
+            docChildren.push(
+                new Paragraph({
+                    alignment: AlignmentType.CENTER,
+                    children: [
+                        new TextRun({
+                            text: globalWeekInfo ? `Week: ${globalWeekInfo}` : "Week:",
+                            bold: true,
+                            size: 24 // 12pt
+                        }),
+                    ],
+                    spacing: { after: 400 } 
+                })
+            );
+
+            // 4. Loop through reports
+            reports.forEach((report, rIndex) => {
+                
+                // Department Heading (Just Dept name)
+                docChildren.push(
+                    new Paragraph({
+                        children: [
+                            new TextRun({ 
+                                text: `Department: ${report.department}`, 
+                                bold: true, 
+                                size: 28 // 14pt
+                            }),
+                        ],
+                        spacing: { before: 200, after: 100 }
+                    })
+                );
+
+                // Create Data Table
+                const headerRow = new TableRow({
+                    tableHeader: true,
+                    children: [
+                        createHeaderCell("Sl No", 10),
+                        createHeaderCell("Name of the Faculty Member", 25),
+                        createHeaderCell("ID No", 10),
+                        createHeaderCell("Hours (T & P)", 10),
+                        createHeaderCell("Other Academic / Admin Activities", 35),
+                        createHeaderCell("Hours", 10),
+                    ],
+                });
+
+                const dataRows = report.rows.map((item, index) => {
+                    return new TableRow({
+                        children: [
+                            createDataCell((index + 1).toString()), 
+                            createDataCell(item.name),
+                            createDataCell(item.id),
+                            createDataCell(item.hoursTP),
+                            createDataCell(item.activity),
+                            createDataCell(item.hoursOther),
+                        ],
+                    });
+                });
+
+                // Add the Table
+                docChildren.push(
+                    new Table({
+                        columnWidths: [1000, 3000, 1500, 1500, 4000, 1500],
+                        width: { size: 100, type: WidthType.PERCENTAGE },
+                        borders: borderStyle,
+                        rows: [headerRow, ...dataRows],
+                    })
+                );
+
+                // Extra spacing after each department section
+                docChildren.push(new Paragraph({ text: "", spacing: { after: 400 } }));
+            });
+
+            const doc = new Document({
+                sections: [{
+                    properties: {},
+                    children: docChildren,
+                }],
+            });
+
+            const blob = await Packer.toBlob(doc);
+            saveAs(blob, "University_Deptwise_Planner_Report.docx");
+        }
+
+        // Helper for Cells
+        function createHeaderCell(text, widthPercent) {
+            return new docx.TableCell({
+                width: { size: widthPercent, type: docx.WidthType.PERCENTAGE },
+                shading: { fill: "F3F4F6" }, 
+                verticalAlign: docx.VerticalAlign.CENTER,
+                children: [
+                    new docx.Paragraph({
+                        alignment: docx.AlignmentType.CENTER,
+                        children: [new docx.TextRun({ text: text, bold: true, size: 20 })],
+                    }),
+                ],
+            });
+        }
+
+        function createDataCell(text) {
+            return new docx.TableCell({
+                verticalAlign: docx.VerticalAlign.CENTER,
+                children: [
+                    new docx.Paragraph({
+                        alignment: docx.AlignmentType.CENTER, 
+                        children: [new docx.TextRun({ text: text || "-", size: 20 })],
+                    }),
+                ],
+            });
+        }
+
+    </script>
+</body>
+</html>
